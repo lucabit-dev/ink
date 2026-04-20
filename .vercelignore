@@ -1,5 +1,13 @@
+# Railway / local only — not needed for Vercel Python Functions (avoids Docker/Heroku detection issues).
+Dockerfile
+Procfile
+.dockerignore
+
 web/data
 work
 .git
 **/__pycache__
 **/*.pyc
+
+# Root app.py is unused on Vercel: routing goes through api/index.py (keeps single Python Function).
+app.py
