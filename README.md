@@ -52,7 +52,7 @@ A **`Procfile`** is included for Nixpacks-style builds without Docker; the Docke
 
 ### Deploy to Vercel
 
-The serverless entry is **`api/index.py`** (see **`vercel.json`** rewrites). Root **`app.py`** is ignored in the Vercel upload so only one Python Function is built; **`Dockerfile`** / **`Procfile`** are also ignored there (they stay in Git for Railway). Static assets live under **`public/static/`**.
+Vercel’s [FastAPI guide](https://vercel.com/docs/frameworks/backend/fastapi) expects a root **`app.py`** that exposes an `app` object (this repo does: it imports `app` from **`web.app`**). **`Dockerfile`** / **`Procfile`** stay out of the upload via **`.vercelignore`** so the Python runtime is used, not Docker. Static assets: **`public/static/`**.
 
 Set the same env vars in the Vercel dashboard (no `.env` in repo).
 
