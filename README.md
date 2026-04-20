@@ -52,7 +52,9 @@ A **`Procfile`** is included for Nixpacks-style builds without Docker; the Docke
 
 ### Deploy to Vercel
 
-Includes **`app.py`**, **`vercel.json`**, **`public/static/`**, **`.vercelignore`**. Set the same env vars in the Vercel dashboard (no `.env` in repo).
+The serverless entry is **`api/index.py`** (see **`vercel.json`** rewrites). Root **`app.py`** is ignored in the Vercel upload so only one Python Function is built; **`Dockerfile`** / **`Procfile`** are also ignored there (they stay in Git for Railway). Static assets live under **`public/static/`**.
+
+Set the same env vars in the Vercel dashboard (no `.env` in repo).
 
 **Limits:** Short timeouts, often **no `git`** in the runtime—**dry run** still works; **full** clone/commit/push usually needs Railway/Docker/self-hosted `uvicorn`.
 
