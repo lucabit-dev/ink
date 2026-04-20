@@ -1,0 +1,5 @@
+web/data
+work
+.git
+**/__pycache__
+**/*.pyc

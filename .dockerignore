@@ -1,0 +1,7 @@
+.git
+.env
+**/web/data
+**/work
+**/__pycache__
+**/*.pyc
+.vercel

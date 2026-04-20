@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GitHub activity</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <header class="top">
+      <h1>GitHub activity</h1>
+      <p class="lede">
+        Sign in, pick repositories you can push to, and backfill a branch with dated synthetic commits
+        (see the CLI README for exactly what changes).
+      </p>
+      {% if not oauth_configured %}
+      <p class="warn">
+        OAuth is not configured. Set <code>GITHUB_CLIENT_ID</code> and <code>GITHUB_CLIENT_SECRET</code>
+        and restart the server.
+      </p>
+      {% endif %}
+    </header>
+
+    {% if not logged_in %}
+    <section class="panel signin">
+      <p class="muted">Uses GitHub OAuth with <code>repo</code> scope so clones and pushes work.</p>
+      <a class="btn primary" href="/auth/github">Sign in with GitHub</a>
+    </section>
+    {% else %}
+    <div class="toolbar">
+      <span class="pill">Signed in as <strong>{{ login }}</strong></span>
+      <a class="btn ghost" href="/auth/logout">Sign out</a>
+    </div>
+
+    <section class="panel">
+      <h2>Repos</h2>
+      <p class="muted small">Only repositories where you are the owner are listed.</p>
+      <label class="field">
+        <span>Filter</span>
+        <input type="search" id="repoFilter" placeholder="Type to filter by name…" autocomplete="off" />
+      </label>
+      <div id="repoList" class="repo-list" role="group" aria-label="Repositories"></div>
+      <p id="repoStatus" class="muted small"></p>
+    </section>
+
+    <section class="panel">
+      <h2>Schedule</h2>
+      <div class="grid">
+        <label class="field">
+          <span>Activity since year</span>
+          <input type="number" id="year" min="2000" max="2100" value="" required />
+        </label>
+        <label class="field">
+          <span>Commits per repo</span>
+          <input type="number" id="commits" min="1" max="500" value="30" />
+        </label>
+      </div>
+      <label class="check">
+        <input type="checkbox" id="dryRun" />
+        <span>Dry run (print plan only, no git changes)</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="noPush" />
+        <span
+          >Skip push (commits only in the server clone directory, e.g. <code>web/data/work</code> locally or
+          <code>/tmp</code> on Vercel)</span
+        >
+      </label>
+      <button type="button" class="btn primary" id="runBtn">Run</button>
+      <p id="formError" class="error" hidden></p>
+    </section>
+
+    <section class="panel log-panel">
+      <h2>Output</h2>
+      <pre id="logOut" class="log" aria-live="polite"></pre>
+    </section>
+    {% endif %}
+
+    <script>
+      (function () {
+        const defaultYear = new Date().getFullYear() - 1;
+        const y = document.getElementById("year");
+        if (y) y.value = defaultYear;
+      })();
+    </script>
+    {% if logged_in %}
+    <script>
+      (function () {
+        const repoList = document.getElementById("repoList");
+        const repoStatus = document.getElementById("repoStatus");
+        const repoFilter = document.getElementById("repoFilter");
+        const runBtn = document.getElementById("runBtn");
+        const logOut = document.getElementById("logOut");
+        const formError = document.getElementById("formError");
+        let allRepos = [];
+
+        function esc(s) {
+          const d = document.createElement("div");
+          d.textContent = s;
+          return d.innerHTML;
+        }
+
+        function renderRepos(filter) {
+          const q = (filter || "").trim().toLowerCase();
+          repoList.innerHTML = "";
+          const frag = document.createDocumentFragment();
+          for (const r of allRepos) {
+            if (q && !r.full_name.toLowerCase().includes(q)) continue;
+            const id = "repo-" + r.full_name.replace(/[^a-zA-Z0-9_-]/g, "_");
+            const row = document.createElement("label");
+            row.className = "repo-row";
+            row.innerHTML =
+              '<input type="checkbox" name="repo" value="' +
+              esc(r.full_name) +
+              '" id="' +
+              esc(id) +
+              '" />' +
+              '<span class="repo-name">' +
+              esc(r.full_name) +
+              "</span>" +
+              (r.private ? '<span class="badge">private</span>' : "") +
+              (r.description
+                ? '<span class="repo-desc">' + esc(r.description) + "</span>"
+                : "");
+            frag.appendChild(row);
+          }
+          repoList.appendChild(frag);
+        }
+
+        repoFilter.addEventListener("input", function () {
+          renderRepos(repoFilter.value);
+        });
+
+        fetch("/api/repos")
+          .then(function (r) {
+            if (!r.ok) throw new Error("Could not load repos");
+            return r.json();
+          })
+          .then(function (data) {
+            allRepos = data.repos || [];
+            repoStatus.textContent = allRepos.length
+              ? allRepos.length + " repositories loaded."
+              : "No repositories found.";
+            renderRepos("");
+          })
+          .catch(function (e) {
+            repoStatus.textContent = e.message || "Failed to load repos.";
+          });
+
+        function selectedRepos() {
+          return Array.prototype.map.call(
+            document.querySelectorAll('input[name="repo"]:checked'),
+            function (el) {
+              return el.value;
+            }
+          );
+        }
+
+        runBtn.addEventListener("click", function () {
+          formError.hidden = true;
+          const repos = selectedRepos();
+          const year = parseInt(document.getElementById("year").value, 10);
+          const commits = parseInt(document.getElementById("commits").value, 10);
+          const dryRun = document.getElementById("dryRun").checked;
+          const noPush = document.getElementById("noPush").checked;
+          if (!repos.length) {
+            formError.textContent = "Select at least one repository.";
+            formError.hidden = false;
+            return;
+          }
+          runBtn.disabled = true;
+          logOut.textContent = "Starting…";
+          fetch("/api/jobs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              year: year,
+              repos: repos,
+              commits_per_repo: commits,
+              dry_run: dryRun,
+              no_push: noPush,
+            }),
+          })
+            .then(function (r) {
+              return r.json().then(function (body) {
+                if (!r.ok) {
+                  var d = body.detail;
+                  var msg;
+                  if (typeof d === "string") msg = d;
+                  else if (Array.isArray(d))
+                    msg = d
+                      .map(function (x) {
+                        return x.msg || "";
+                      })
+                      .filter(Boolean)
+                      .join("; ");
+                  else msg = JSON.stringify(body);
+                  throw new Error(msg || r.statusText);
+                }
+                return body;
+              });
+            })
+            .then(function (body) {
+              logOut.textContent = body.log || "";
+              if (body.error) {
+                logOut.textContent += (logOut.textContent ? "\n\n" : "") + "[error] " + body.error;
+              }
+              runBtn.disabled = false;
+            })
+            .catch(function (e) {
+              formError.textContent = e.message || "Request failed";
+              formError.hidden = false;
+              logOut.textContent = "";
+              runBtn.disabled = false;
+            });
+        });
+      })();
+    </script>
+    {% endif %}
+  </body>
+</html>
