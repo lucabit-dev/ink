@@ -56,7 +56,9 @@ The serverless entry is **`api/index.py`** (see **`vercel.json`** rewrites). Roo
 
 Set the same env vars in the Vercel dashboard (no `.env` in repo).
 
-**Limits:** Short timeouts, often **no `git`** in the runtime—**dry run** still works; **full** clone/commit/push usually needs Railway/Docker/self-hosted `uvicorn`.
+**Function duration:** `vercel.json` cannot use the `functions` map for Python the same way as for Node (see [unmatched function pattern](https://vercel.link/unmatched-function-pattern)). For long-running jobs, raise **max duration** under **Project → Settings → Functions** (plan limits apply).
+
+**Limits:** Short defaults on Hobby, often **no `git`** in the runtime—**dry run** still works; **full** clone/commit/push usually needs Railway/Docker/self-hosted `uvicorn`.
 
 ---
 
